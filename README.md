@@ -67,46 +67,24 @@ AIRELABS_HOOK_OUTPUT_PATH=/tmp/hook-output.json \
 
 ## Releasing
 
-Images are pushed to the Aire Labs registry, which is **per-org** and **immutable-tagged** — every image gets one unique tag (no `:latest`). The host is derived from your org id and the environment:
-
-| Environment | Host |
-|---|---|
-| stage | `org-<ORG_ID>.registry-stage.airelabs.studio` |
-| production | `org-<ORG_ID>.registry.airelabs.run` |
+Images are pushed to the Aire Labs registry, which is **per-org** and **immutable-tagged** — every image gets one unique tag (no `:latest`). The host is `org-<ORG_ID>.<registry-domain>`, derived from your org id.
 
 All the heavy lifting lives in [`scripts/release.sh`](scripts/release.sh), invoked the same way locally and in CI. The login username is `api-key`; the password is your **registry API key**. Pass your org id via `REGISTRY_ORG_ID` (nothing org-specific is committed) and the API key via `REGISTRY_PASSWORD` — **credentials are never committed**:
 
 ```bash
 # (a) Log in once — the credential lives in your Docker keychain:
-docker login org-<ORG_ID>.registry-stage.airelabs.studio --username api-key --password <YOUR_API_KEY>
+docker login org-<ORG_ID>.<registry-domain> --username api-key --password <YOUR_API_KEY>
 REGISTRY_ORG_ID=<ORG_ID> moon run lcoe:release
 
-# (b) Or pass the API key inline from your own secrets manager (e.g. 1Password)
-#     — the reference stays in your shell, not in the repo:
-REGISTRY_ORG_ID=<ORG_ID> \
-REGISTRY_PASSWORD="$(op read 'op://<vault>/<item>/<field>')" \
-  moon run lcoe:release
-
-# Push to production with an explicit release tag:
-REGISTRY_ORG_ID=<ORG_ID> RELEASE_ENV=production RELEASE_VERSION=v2026-06-10-001 \
-REGISTRY_PASSWORD="$(op read 'op://<vault>/<item>/<field>')" \
-  moon run lcoe:release
+# (b) Or pass the API key inline at run time — it stays in your shell, not the repo:
+REGISTRY_ORG_ID=<ORG_ID> REGISTRY_PASSWORD=<YOUR_API_KEY> moon run lcoe:release
 ```
 
 If you run `lcoe:release` without an org id or credential, the script fails fast **before** building and prints these instructions.
 
-CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)) — **stage only for now**:
-
-| Trigger | Environment | Docker tag |
-|---|---|---|
-| Push to `main` | stage | `branch-main-<shortsha>` |
-| Manual dispatch | stage | `branch-<branch>-<shortsha>` |
-
-The workflow needs, under **Settings → Secrets and variables → Actions**:
+CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)) on every push to `main` and on manual dispatch, tagging the image `branch-<branch>-<shortsha>`. It needs, under **Settings → Secrets and variables → Actions**:
 - a repo **variable** `REGISTRY_ORG_ID` (your org id — not sensitive), and
-- a repo **secret** `REGISTRY_API_KEY_STAGE` (the stage registry API key).
-
-> Production isn't wired up yet. To add it later: a `v*` tag trigger resolving `env=production` plus a `REGISTRY_API_KEY_PROD` secret (and the prod org id if it differs).
+- a repo **secret** `REGISTRY_API_KEY` (the registry API key).
 
 ## Layout
 
@@ -119,5 +97,10 @@ The workflow needs, under **Settings → Secrets and variables → Actions**:
 | `data/` | Year-by-year cost projections per technology, built into the image. |
 | `fixtures/` | Example HookInput payloads. |
 | `tests/` | `pytest` unit + integration tests. |
+| `Dockerfile` | uv-based image; runs `python main.py`. |
+| `scripts/release.sh` | Build + (optionally) push the image — one entry point for local and CI. |
+| `moon.yml`, `.moon/` | moon project + toolchain (python/uv) config; the `lcoe:*` tasks. |
+| `.prototools` | Pinned moon / python / uv versions (`proto install`). |
+| `.github/workflows/` | `ci` (lint + test) and `release` (build + push the image). |
 
 See the [full guide](https://www.airelabs.com/docs/docker-programming-language-python) for a walkthrough of the code and how to write your own function.

@@ -63,7 +63,7 @@ jobs:
       #
       # Set under Settings → Secrets and variables → Actions:
       #   Variables: REGISTRY_ORG_ID   (your org id — not sensitive)
-      #   Secrets:   REGISTRY_API_KEY_STAGE   (the stage registry API key)
+      #   Secrets:   REGISTRY_API_KEY  (the registry API key)
       - name: Build and push image
         env:
           RELEASE_ENV: stage
@@ -72,5 +72,5 @@ jobs:
           # The Aire Labs registry login username (not a secret; the API key is).
           REGISTRY_USERNAME: api-key
           REGISTRY_ORG_ID: ${{ vars.REGISTRY_ORG_ID }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_API_KEY_STAGE }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_API_KEY }}
         run: moon run lcoe:release
