@@ -57,5 +57,6 @@ def load_cost_assumptions(dataset: str, target_year: int) -> CostAssumptions:
 
     years = ", ".join(row["year"] for row in rows)
     raise ValueError(
-        f"year {target_year} not found in '{dataset}' dataset — available years: {years}"
+        f"year {target_year} not found in '{dataset}' dataset"
+        f" — available years: {years}"
     )

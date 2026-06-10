@@ -45,9 +45,11 @@ cp fixtures/hook-input-unknown-dataset.json /tmp/airelabs/hook-input.json # unkn
 The toolchain is managed by [proto](https://moonrepo.dev/proto) + [moon](https://moonrepo.dev/moon), with [uv](https://docs.astral.sh/uv/) as the Python package manager. **This repo is a self-contained moon workspace** — clone it on its own and everything works; it is only vendored into the siro monorepo as a git submodule for visibility. The runtime has **no third-party dependencies** (the Hook I/O helpers use only the Python standard library); `pytest` and `ruff` are dev-only tools.
 
 ```bash
-proto install            # installs python + uv pinned in .prototools
+proto install            # installs moon + python + uv pinned in .prototools
 moon run lcoe:test       # moon runs `uv sync` for you (cached), then pytest
 moon run lcoe:lint       # ruff check
+moon run lcoe:format     # ruff format --check (CI gate)
+moon run lcoe:format-fix # apply formatting + lint autofixes in place
 moon run lcoe:build      # build the Docker image locally (test + lint first)
 ```
 
