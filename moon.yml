@@ -1,0 +1,81 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'python'
+layer: 'application'
+stack: 'backend'
+
+project:
+  name: 'lcoe'
+  description: 'Aire Labs Container Function — Python LCOE example'
+
+# moon's unstable_python toolchain runs `uv sync` before these tasks
+# (hash-cached on the lockfile/manifest/venv), so there is no separate install
+# step — that is the "install dependencies" heavy-lifting moon does for free,
+# locally and in CI alike.
+tasks:
+  test:
+    command: 'uv run pytest -q'
+    inputs:
+      - 'lcoe/**/*'
+      - 'tests/**/*'
+      - 'data/**/*'
+      - 'fixtures/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+    # pytest writes no cacheable artifact; it's a pass/fail gate.
+    options:
+      cache: false
+
+  lint:
+    command: 'uv run ruff check .'
+    inputs:
+      - 'lcoe/**/*'
+      - 'tests/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+
+  format:
+    command: 'uv run ruff format --check .'
+    inputs:
+      - 'lcoe/**/*'
+      - 'tests/**/*'
+      - 'main.py'
+
+  # Build the Docker image locally (no push). Delegates to the same script the
+  # release task and the CI workflow use, with PUSH disabled.
+  build:
+    command: 'bash scripts/release.sh'
+    env:
+      RELEASE_PUSH: 'false'
+    inputs:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'lcoe/**/*'
+      - 'data/**/*'
+      - 'fixtures/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'scripts/release.sh'
+    options:
+      # The artifact is a Docker image in the local daemon, not a file moon can
+      # hash/hydrate — don't try to cache it.
+      cache: false
+    deps:
+      - 'test'
+      - 'lint'
+
+  # Build AND push the image to the Aire Labs registry. This is what the GitHub
+  # release workflow invokes (`moon run lcoe:release`), and what you run locally
+  # to cut a release by hand. Configure via env vars / scripts/release.sh.
+  release:
+    command: 'bash scripts/release.sh'
+    env:
+      RELEASE_PUSH: 'true'
+    options:
+      cache: false
+      runInCI: false # only run on explicit invocation (tag workflow / local), never in PR `moon ci`
+    deps:
+      - 'test'
+      - 'lint'

@@ -1,0 +1,37 @@
+name: CI
+
+# Lint + test on every push and PR. Mirrors `moon run lcoe:test lcoe:lint` —
+# the same tasks you run locally — so green here means green on your machine.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Provisions Python + uv from .prototools and lets moon run the cached
+      # `uv sync` before the tasks — no separate install step.
+      - name: Setup moon toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      - name: Lint and test
+        run: moon run lcoe:lint lcoe:test

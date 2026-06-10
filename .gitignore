@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# moon
+.moon/cache/
+.moon/docker/
+
+# uv: the lockfile (uv.lock) IS committed for reproducible Docker builds.

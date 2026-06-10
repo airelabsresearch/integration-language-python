@@ -1,0 +1,20 @@
+{
+  "parametersV1": [
+    {
+      "name": "dataset",
+      "string": "geothermal"
+    },
+    {
+      "name": "target_year",
+      "number": { "value": "2027" }
+    },
+    {
+      "name": "discount_rate",
+      "number": { "value": "0.08" }
+    },
+    {
+      "name": "lifetime_years",
+      "number": { "value": "25", "unit": "years" }
+    }
+  ]
+}

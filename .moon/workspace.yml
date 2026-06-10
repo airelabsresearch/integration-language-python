@@ -1,0 +1,17 @@
+$schema: 'https://moonrepo.dev/schemas/workspace.json'
+
+# This repo is a SELF-CONTAINED moon workspace. Clone it on its own, run
+# `proto install` then `moon run <task>`, and everything works without siro —
+# it is only vendored into the siro monorepo as a git submodule for visibility.
+#
+# A single project lives at the repo root.
+projects:
+  lcoe: '.'
+
+# Don't let moon hunt for a VCS root above this repo. When cloned standalone
+# this repo is its own git root; when checked out as a siro submodule the
+# enclosing .git would otherwise confuse affected-detection. Pin it here so
+# behaviour is identical in both layouts.
+vcs:
+  client: 'git'
+  defaultBranch: 'main'

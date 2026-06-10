@@ -1,0 +1,16 @@
+# Toolchain versions for this example, managed by proto (https://moonrepo.dev/proto).
+#
+# Run `proto install` from this directory to provision exactly these versions
+# locally; they are put on your PATH and used by `uv` and the dev workflow.
+#
+#   uv     — the Python package & project manager. Pinned to match the siro
+#            monorepo's root `.prototools` (`uv = "0.9.8"`), so a developer's
+#            `uv` here stays in lockstep with the rest of the repo.
+#   python — the interpreter. proto installs it; uv also reads `.python-version`
+#            (3.12) and `requires-python` in pyproject.toml, so `uv run` resolves
+#            the same interpreter whether or not proto provisioned it.
+python = "3.12"
+uv = "0.9.8"
+
+[settings]
+auto-install = true

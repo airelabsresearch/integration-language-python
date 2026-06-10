@@ -1,0 +1,105 @@
+name: Release
+
+# Build and push the LCOE container-function image to the Aire Labs registry.
+# The heavy lifting (install deps via the moon Python/uv toolchain, test, lint,
+# docker build + push) lives in scripts/release.sh and is invoked through
+# `moon run lcoe:release` — the SAME entry point you run locally, so CI and a
+# developer machine do identical work.
+#
+# Triggers & docker tags (the registry enforces IMMUTABLE tags, so every tag is
+# unique and pushed exactly once — there is no `:latest`):
+#   - push to main          → tag "branch-main-<shortsha>" (e.g.
+#                              branch-main-1234567), env=stage
+#   - push of a tag `v*`     → tag "<git tag>" (e.g. v2026-06-10-001),
+#                              env=production  (the preferred, blessed release)
+#   - manual dispatch        → choose the environment; tag derived by release.sh
+#                              ("branch-<branch>-<shortsha>")
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target registry environment'
+        type: choice
+        options:
+          - stage
+          - production
+        default: stage
+
+permissions:
+  contents: read
+
+# Serialize per ref so two pushes to the same ref don't race on the same tag,
+# but never cancel an in-flight publish (a half-pushed image is worse than a
+# queued one).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # Full history + tags so scripts/release.sh can resolve the tag /
+          # branch + sha for the docker tag.
+          fetch-depth: 0
+
+      # Provisions the Python + uv versions pinned in .prototools via proto, and
+      # (because installDependencies defaults on for the unstable_python
+      # toolchain) lets `moon run` do the cached `uv sync` itself — no
+      # astral-sh/setup-uv, no hand-rolled install step. Same as siro's pattern.
+      - name: Setup moon toolchain
+        uses: moonrepo/setup-toolchain@v0
+        with:
+          auto-install: true
+
+      # Docker buildx for the build/push in scripts/release.sh.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Resolve, in one place, the two things release.sh keys off:
+      #   release_env     stage | production
+      #   release_version the docker tag (empty → release.sh derives branch-…)
+      - name: Resolve release parameters
+        id: params
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            # Blessed release: env=production, tag=<git tag> (preferred).
+            echo "release_env=production"                  >> "$GITHUB_OUTPUT"
+            echo "release_version=${{ github.ref_name }}"  >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual run: chosen env; let release.sh derive the branch-… tag.
+            echo "release_env=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
+            echo "release_version="                                   >> "$GITHUB_OUTPUT"
+          else
+            # Push to main: env=stage, tag=branch-main-<shortsha>.
+            echo "release_env=stage"                                          >> "$GITHUB_OUTPUT"
+            echo "release_version=branch-main-$(git rev-parse --short HEAD)"  >> "$GITHUB_OUTPUT"
+          fi
+
+      # Build + test + lint + push, all via the one moon task. The registry
+      # password is the only secret the script needs; everything else has a
+      # sensible default in scripts/release.sh.
+      - name: Build and push image
+        env:
+          RELEASE_ENV: ${{ steps.params.outputs.release_env }}
+          RELEASE_VERSION: ${{ steps.params.outputs.release_version }}
+          # The Aire Labs registry's push username (not a secret; the password is).
+          REGISTRY_USERNAME: badger
+          # One secret per environment — add these in the repo's
+          # Settings → Secrets and variables → Actions:
+          #   SIRO_REGISTRY_STAGE_PASSWORD, SIRO_REGISTRY_PROD_PASSWORD
+          REGISTRY_PASSWORD: >-
+            ${{ steps.params.outputs.release_env == 'production'
+                && secrets.SIRO_REGISTRY_PROD_PASSWORD
+                || secrets.SIRO_REGISTRY_STAGE_PASSWORD }}
+        run: moon run lcoe:release

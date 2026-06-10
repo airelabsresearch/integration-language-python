@@ -1,0 +1,20 @@
+{
+  "parametersV1": [
+    {
+      "name": "dataset",
+      "string": "wind"
+    },
+    {
+      "name": "target_year",
+      "number": { "value": "2030" }
+    },
+    {
+      "name": "discount_rate",
+      "number": { "value": "0.08" }
+    },
+    {
+      "name": "lifetime_years",
+      "number": { "value": "25", "unit": "years" }
+    }
+  ]
+}
