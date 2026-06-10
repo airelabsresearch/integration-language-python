@@ -82,7 +82,11 @@ REGISTRY_ORG_ID=<ORG_ID> REGISTRY_PASSWORD=<YOUR_API_KEY> moon run lcoe:release
 
 If you run `lcoe:release` without an org id or credential, the script fails fast **before** building and prints these instructions.
 
-CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)) on every push to `main` and on manual dispatch, tagging the image `branch-<branch>-<shortsha>`. It needs, under **Settings → Secrets and variables → Actions**:
+CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)):
+- **push to `main`** (or manual dispatch) → image tagged `branch-<branch>-<shortsha>`
+- **push of a `v*` git tag** (e.g. `v2026-06-10-001`) → image tagged with the git tag, plus a matching GitHub Release
+
+It needs, under **Settings → Secrets and variables → Actions**:
 - a repo **variable** `REGISTRY_ORG_ID` (your org id — not sensitive), and
 - a repo **secret** `REGISTRY_API_KEY` (the registry API key).
 

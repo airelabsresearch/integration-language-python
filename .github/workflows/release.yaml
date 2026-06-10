@@ -6,20 +6,23 @@ name: Release
 # `moon run lcoe:release` — the SAME entry point you run locally, so CI and a
 # developer machine do identical work.
 #
-# STAGE ONLY for now. Every release goes to the stage registry
-# (org-<id>.registry-stage.airelabs.studio). Production is intentionally not
-# wired up yet — when it is, add a `v*` tag trigger that resolves env=production
-# and a REGISTRY_API_KEY_PROD secret.
+# STAGE ONLY for now. Every release (including tagged ones) goes to the stage
+# registry (org-<id>.registry-stage.airelabs.studio). Production is not wired up
+# yet — when it is, route tag pushes to env=production + a REGISTRY_API_KEY_PROD
+# secret.
 #
 # Triggers & docker tags (the registry enforces IMMUTABLE tags, so every tag is
 # unique and pushed exactly once — there is no `:latest`):
-#   - push to main     → tag "branch-main-<shortsha>" (e.g. branch-main-1234567)
-#   - manual dispatch  → tag "branch-<branch>-<shortsha>" (derived by release.sh)
+#   - push of a tag `v*`  → tag "<git tag>" (e.g. v2026-06-10-001) + a GitHub Release
+#   - push to main        → tag "branch-main-<shortsha>" (e.g. branch-main-1234567)
+#   - manual dispatch     → tag "branch-<branch>-<shortsha>" (derived by release.sh)
 
 on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -36,6 +39,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # contents: write only so the tag-push path can create a GitHub Release.
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -57,6 +63,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # On a tag push, pin the docker tag to the git tag (the preferred,
+      # human-named release tag, e.g. v2026-06-10-001). On main / dispatch leave
+      # it empty so release.sh derives "branch-<branch>-<shortsha>".
+      - name: Resolve docker tag
+        id: tag
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "release_version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_version=" >> "$GITHUB_OUTPUT"
+          fi
+
       # Build + test + lint + push, all via the one moon task. release.sh derives
       # the per-org registry host from REGISTRY_ORG_ID + RELEASE_ENV (stage); the
       # only secret it needs is the stage API key.
@@ -67,10 +85,25 @@ jobs:
       - name: Build and push image
         env:
           RELEASE_ENV: stage
-          # Let release.sh derive the tag (branch-<branch>-<shortsha>).
-          RELEASE_VERSION: ''
+          RELEASE_VERSION: ${{ steps.tag.outputs.release_version }}
           # The Aire Labs registry login username (not a secret; the API key is).
           REGISTRY_USERNAME: api-key
           REGISTRY_ORG_ID: ${{ vars.REGISTRY_ORG_ID }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_API_KEY }}
         run: moon run lcoe:release
+
+      # On a tag push, publish a GitHub Release pointing at the image just pushed.
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IMAGE="org-${{ vars.REGISTRY_ORG_ID }}.registry-stage.airelabs.studio/lcoe-python:${{ github.ref_name }}"
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" \
+            --notes "Container image (immutable tag) pushed to the Aire Labs registry:
+
+          \`\`\`
+          $IMAGE
+          \`\`\`"
