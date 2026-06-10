@@ -83,16 +83,19 @@ tasks:
   # Build AND push the image to the Aire Labs registry. This is what the GitHub
   # release workflow invokes (`moon run lcoe:release`), and what you run locally
   # to cut a release by hand. Configure via env vars / scripts/release.sh.
+  #
+  # NOTE: deliberately NO `runInCI: false` here. This task is only ever invoked
+  # by an explicit `moon run lcoe:release` (the release workflow / a manual
+  # release) — there is no `moon ci` in this repo for it to be auto-picked-up
+  # by. On moon 2.3.x, `runInCI: false` made the explicit `moon run` a no-op
+  # inside the CI environment ("No tasks found"), which broke the workflow.
   release:
     command: 'bash scripts/release.sh'
     env:
       RELEASE_PUSH: 'true'
     options:
       cache: false
-      runInCI: false # only run on explicit invocation (tag workflow / local), never in PR `moon ci`
-    # Same gate as build: never push an image whose tests/lint didn't pass. The
-    # release workflow invokes this directly, so these deps ARE the CI gate for
-    # a release (the task itself stays runInCI:false so PR `moon ci` skips it).
+    # Same gate as build: never push an image whose tests/lint didn't pass.
     deps:
       - 'test'
       - 'lint'
