@@ -2,8 +2,6 @@
 
 Computes LCOE (Levelized Cost of Energy) from bundled solar and wind cost data. A working example you can build and run locally with Docker. It is the Python counterpart to the [R example](https://github.com/airelabsresearch/integration-language-r) and produces identical results.
 
-**Full guide:** [Container Functions with Python](https://www.airelabs.com/docs/docker-programming-language-python)
-
 ## Quick start
 
 Requires [Docker](https://orbstack.dev/download) (or [Docker Desktop](https://docs.docker.com/desktop/)). Commands below assume macOS or Linux.
@@ -107,4 +105,4 @@ It needs, under **Settings → Secrets and variables → Actions**:
 | `.prototools` | Pinned moon / python / uv versions (`proto install`). |
 | `.github/workflows/` | `ci` (lint + test) and `release` (build + push the image). |
 
-See the [full guide](https://www.airelabs.com/docs/docker-programming-language-python) for a walkthrough of the code and how to write your own function.
+Start from `lcoe/airelabs.py` (the stdlib-only Hook I/O helpers) when writing your own function.
