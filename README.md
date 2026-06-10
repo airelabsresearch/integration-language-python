@@ -67,15 +67,27 @@ AIRELABS_HOOK_OUTPUT_PATH=/tmp/hook-output.json \
 
 ## Releasing
 
-Images are pushed to the Aire Labs registry. The registry enforces **immutable tags**, so every image is pushed under one unique tag (no `:latest`). All the heavy lifting lives in [`scripts/release.sh`](scripts/release.sh), invoked the same way locally and in CI:
+Images are pushed to the Aire Labs registry. The registry enforces **immutable tags**, so every image is pushed under one unique tag (no `:latest`). All the heavy lifting lives in [`scripts/release.sh`](scripts/release.sh), invoked the same way locally and in CI.
+
+**Credentials** are never committed. Supply them at run time in one of two ways:
 
 ```bash
-# Build + push to stage (uses your existing `docker login`, or set REGISTRY_PASSWORD):
+# (a) Log in once — the credential lives in your Docker keychain:
+docker login badger-registry-stage.airelabs.studio -u badger
 moon run lcoe:release
 
+# (b) Or pass the password inline from your own secrets manager (e.g. 1Password)
+#     — the reference stays in your shell, not in the repo:
+REGISTRY_PASSWORD="$(op read 'op://Shared/NonProduction/SIRO_REGISTRY_STAGE_PASSWORD')" \
+  moon run lcoe:release
+
 # Push to production with an explicit release tag:
-RELEASE_ENV=production RELEASE_VERSION=v2026-06-10-001 moon run lcoe:release
+REGISTRY_PASSWORD="$(op read 'op://Production/Production/SIRO_REGISTRY_PROD_PASSWORD')" \
+  RELEASE_ENV=production RELEASE_VERSION=v2026-06-10-001 \
+  moon run lcoe:release
 ```
+
+If you run `lcoe:release` with no credential available, the script fails fast **before** building and prints these instructions.
 
 CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)):
 

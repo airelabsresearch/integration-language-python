@@ -89,6 +89,42 @@ echo "  push        : $RELEASE_PUSH"
 echo "  platforms   : $PLATFORMS"
 echo "─────────────────────────────────────────────────────────────"
 
+# ── Authenticate BEFORE building (fail fast) ──────────────────────────────────
+# When pushing, sort out credentials up front so we don't build the whole image
+# only to die at the push with docker's opaque "no basic auth credentials".
+#   - REGISTRY_PASSWORD set        → non-interactive login (the CI path; locally
+#                                    you can inline it, e.g. from a secrets
+#                                    manager, WITHOUT committing anything).
+#   - else, existing docker login  → use it.
+#   - else                         → exit now with instructions.
+if [[ "$RELEASE_PUSH" == "true" ]]; then
+  DOCKER_CONFIG_FILE="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+  if [[ -n "${REGISTRY_PASSWORD:-}" ]]; then
+    echo "Logging in to $REGISTRY_HOST as $REGISTRY_USERNAME"
+    echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USERNAME" --password-stdin
+  elif [[ -f "$DOCKER_CONFIG_FILE" ]] && grep -q "$REGISTRY_HOST" "$DOCKER_CONFIG_FILE"; then
+    # Host appears in docker's config (auths entry or credential helper) — a
+    # prior `docker login` is in effect.
+    echo "Using existing 'docker login $REGISTRY_HOST' session."
+  else
+    cat >&2 <<EOF
+release.sh: no credentials for $REGISTRY_HOST, and RELEASE_PUSH=true.
+
+Authenticate in one of these ways (neither puts secrets in this repo):
+
+  1. Log in once (credential lives in your Docker keychain):
+       docker login $REGISTRY_HOST -u $REGISTRY_USERNAME
+
+  2. Or supply the password inline from your own secrets manager, e.g.:
+       REGISTRY_PASSWORD="\$(op read 'op://Shared/NonProduction/SIRO_REGISTRY_STAGE_PASSWORD')" \\
+         moon run lcoe:release
+
+Then re-run. (The image build is cached, so the retry is fast.)
+EOF
+    exit 1
+  fi
+fi
+
 # ── Build ────────────────────────────────────────────────────────────────────
 # Use buildx so the same command can build multi-arch and push in one shot when
 # requested. `--load` (single-arch, into the local daemon) when not pushing so
@@ -97,18 +133,7 @@ echo "────────────────────────�
 # Exactly ONE tag: the Aire Labs registry enforces immutable tags, so there is
 # no `:latest`. The tag is the git tag or branch-shortsha (unique per commit).
 BUILD_ARGS=(buildx build --platform "$PLATFORMS" -t "$TAGGED")
-
 if [[ "$RELEASE_PUSH" == "true" ]]; then
-  # ── Authenticate (only when pushing) ───────────────────────────────────────
-  # If REGISTRY_PASSWORD is set, log in non-interactively (this is the CI path,
-  # where the workflow injects the secret). If it's unset we assume the caller
-  # is already `docker login`-ed to the host (the convenient local path).
-  if [[ -n "${REGISTRY_PASSWORD:-}" ]]; then
-    echo "Logging in to $REGISTRY_HOST as $REGISTRY_USERNAME"
-    echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" -u "$REGISTRY_USERNAME" --password-stdin
-  else
-    echo "REGISTRY_PASSWORD not set — assuming an existing 'docker login $REGISTRY_HOST' session."
-  fi
   BUILD_ARGS+=(--push)
 else
   BUILD_ARGS+=(--load)
