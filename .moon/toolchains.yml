@@ -1,0 +1,21 @@
+$schema: 'https://moonrepo.dev/schemas/toolchains.json'
+
+# Python (uv) toolchain. moon 2.3 ships `unstable_python` + `unstable_uv` as
+# built-in toolchains (the `unstable_` prefix flags them as v0.1.x). With these
+# enabled, moon OWNS Python setup: it installs the pinned Python + uv via proto
+# (reading .prototools — no astral-sh/setup-uv action needed) and runs `uv sync`
+# before any Python task whose lockfile/manifest/venv changed (hash-cached).
+#
+# This mirrors the siro monorepo's .moon/toolchains.yml so a developer's
+# experience is identical, but it is fully self-contained: nothing here points
+# back at siro.
+unstable_python:
+  # Match requires-python (>=3.12) in pyproject.toml and the .python-version marker.
+  version: '3.12'
+  packageManager: 'uv'
+  # Single project virtualenv at the repo root.
+  venvName: '.venv'
+
+unstable_uv:
+  # Pin uv to the same version as .prototools (kept in lockstep with siro).
+  version: '0.9.8'

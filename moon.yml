@@ -1,0 +1,98 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'python'
+layer: 'application'
+stack: 'backend'
+
+project:
+  name: 'lcoe'
+  description: 'Aire Labs Container Function — Python LCOE example'
+
+# moon's unstable_python toolchain runs `uv sync` before these tasks
+# (hash-cached on the lockfile/manifest/venv), so there is no separate install
+# step — that is the "install dependencies" heavy-lifting moon does for free,
+# locally and in CI alike.
+tasks:
+  test:
+    command: 'uv run pytest -q'
+    inputs:
+      - 'lcoe/**/*'
+      - 'tests/**/*'
+      - 'data/**/*'
+      - 'fixtures/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+    # No `outputs` (pytest writes no artifact), but caching still short-circuits
+    # a re-run when none of the inputs changed — so `moon run lcoe:build` (which
+    # depends on this) is a no-op on an unchanged tree instead of re-running the
+    # suite every time.
+
+  lint:
+    command: 'uv run ruff check .'
+    inputs:
+      - 'lcoe/**/*'
+      - 'tests/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+
+  # Check formatting (CI gate / `moon ci`). Use `format-fix` to actually apply.
+  format:
+    command: 'uv run ruff format --check .'
+    inputs:
+      - 'lcoe/**/*'
+      - 'tests/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+
+  # Apply formatting AND lint autofixes in place. Run this when `format`/`lint`
+  # fail. Mutates the working tree, so it's never cached and never runs in CI.
+  # `script` (not `command`) because it chains two commands.
+  format-fix:
+    script: 'uv run ruff format . && uv run ruff check --fix .'
+    options:
+      cache: false
+      runInCI: false
+
+  # Build the Docker image locally (no push). Delegates to the same script the
+  # release task and the CI workflow use, with PUSH disabled.
+  build:
+    command: 'bash scripts/release.sh'
+    env:
+      RELEASE_PUSH: 'false'
+    inputs:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'lcoe/**/*'
+      - 'data/**/*'
+      - 'fixtures/**/*'
+      - 'main.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'scripts/release.sh'
+    options:
+      # The artifact is a Docker image in the local daemon, not a file moon can
+      # hash/hydrate — don't try to cache it.
+      cache: false
+    # Gate the build on a green tree. These deps are cached, so on an unchanged
+    # tree they're instant cache hits — you don't re-pay test+lint to rebuild.
+    deps:
+      - 'test'
+      - 'lint'
+
+  # Build AND push the image to the Aire Labs registry. This is what the GitHub
+  # release workflow invokes (`moon run lcoe:release`), and what you run locally
+  # to cut a release by hand. Configure via env vars / scripts/release.sh.
+  release:
+    command: 'bash scripts/release.sh'
+    env:
+      RELEASE_PUSH: 'true'
+    options:
+      cache: false
+      runInCI: false # only run on explicit invocation (tag workflow / local), never in PR `moon ci`
+    # Same gate as build: never push an image whose tests/lint didn't pass. The
+    # release workflow invokes this directly, so these deps ARE the CI gate for
+    # a release (the task itself stays runInCI:false so PR `moon ci` skips it).
+    deps:
+      - 'test'
+      - 'lint'
