@@ -86,20 +86,24 @@ jobs:
             echo "release_version=branch-main-$(git rev-parse --short HEAD)"  >> "$GITHUB_OUTPUT"
           fi
 
-      # Build + test + lint + push, all via the one moon task. The registry
-      # password is the only secret the script needs; everything else has a
-      # sensible default in scripts/release.sh.
+      # Build + test + lint + push, all via the one moon task. release.sh derives
+      # the per-org registry host from REGISTRY_ORG_ID + RELEASE_ENV; the only
+      # secret it needs is the API key (REGISTRY_PASSWORD).
       - name: Build and push image
         env:
           RELEASE_ENV: ${{ steps.params.outputs.release_env }}
           RELEASE_VERSION: ${{ steps.params.outputs.release_version }}
-          # The Aire Labs registry's push username (not a secret; the password is).
-          REGISTRY_USERNAME: badger
-          # One secret per environment — add these in the repo's
-          # Settings → Secrets and variables → Actions:
-          #   SIRO_REGISTRY_STAGE_PASSWORD, SIRO_REGISTRY_PROD_PASSWORD
+          # The Aire Labs registry login username (not a secret; the API key is).
+          REGISTRY_USERNAME: api-key
+          # Non-sensitive org id → repo VARIABLE (Settings → Secrets and
+          # variables → Actions → Variables): REGISTRY_ORG_ID. The host is
+          # org-<id>.registry-stage.airelabs.studio (stage) /
+          # org-<id>.registry.airelabs.run (production).
+          REGISTRY_ORG_ID: ${{ vars.REGISTRY_ORG_ID }}
+          # The API key → repo SECRET, one per environment (Settings → Secrets):
+          #   REGISTRY_API_KEY_STAGE, REGISTRY_API_KEY_PROD
           REGISTRY_PASSWORD: >-
             ${{ steps.params.outputs.release_env == 'production'
-                && secrets.SIRO_REGISTRY_PROD_PASSWORD
-                || secrets.SIRO_REGISTRY_STAGE_PASSWORD }}
+                && secrets.REGISTRY_API_KEY_PROD
+                || secrets.REGISTRY_API_KEY_STAGE }}
         run: moon run lcoe:release

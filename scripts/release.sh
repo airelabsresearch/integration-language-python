@@ -21,11 +21,16 @@
 #   RELEASE_VERSION   docker tag to use          (default: exact git tag on HEAD,
 #                                                 else "branch-<branch>-<shortsha>",
 #                                                 e.g. branch-main-1234567)
-#   REGISTRY_HOST     override the registry host (default: derived from
-#                                                 RELEASE_ENV — see below)
-#   REGISTRY_USERNAME registry push username     (default: badger — the username
-#                                                 the Aire Labs registry expects)
-#   REGISTRY_PASSWORD registry password          (required only when pushing and
+#   REGISTRY_ORG_ID   your Aire Labs org id      (required when pushing — the
+#                                                 registry host is per-org, e.g.
+#                                                 org-01k…; not baked into the repo)
+#   REGISTRY_HOST     full registry host          (default: derived from
+#                                                 REGISTRY_ORG_ID + RELEASE_ENV;
+#                                                 set this to bypass derivation)
+#   REGISTRY_USERNAME registry login username     (default: api-key — what the
+#                                                 Aire Labs registry expects; the
+#                                                 password is the actual API key)
+#   REGISTRY_PASSWORD registry API key            (required only when pushing and
 #                                                 not already `docker login`-ed)
 #   IMAGE_REPO        repo path under the host    (default: lcoe-python)
 #   PLATFORMS         buildx platforms            (default: linux/amd64)
@@ -39,21 +44,41 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# ── Resolve environment → registry host ──────────────────────────────────────
 RELEASE_ENV="${RELEASE_ENV:-stage}"
 case "$RELEASE_ENV" in
-  stage)      DEFAULT_HOST="badger-registry-stage.airelabs.studio" ;;
-  production) DEFAULT_HOST="badger-registry.airelabs.studio" ;;
+  stage|production) ;;
   *) echo "release.sh: RELEASE_ENV must be 'stage' or 'production', got '$RELEASE_ENV'" >&2; exit 2 ;;
 esac
 
-REGISTRY_HOST="${REGISTRY_HOST:-$DEFAULT_HOST}"
-# The Aire Labs registry's push username. Override via REGISTRY_USERNAME if the
-# registry rotates it; it is NOT a secret (the password is).
-REGISTRY_USERNAME="${REGISTRY_USERNAME:-badger}"
-IMAGE_REPO="${IMAGE_REPO:-lcoe-python}"
 RELEASE_PUSH="${RELEASE_PUSH:-false}"
+# The Aire Labs registry's login username — NOT a secret (the API key is, and is
+# passed as REGISTRY_PASSWORD). Override only if the registry changes it.
+REGISTRY_USERNAME="${REGISTRY_USERNAME:-api-key}"
+IMAGE_REPO="${IMAGE_REPO:-lcoe-python}"
 PLATFORMS="${PLATFORMS:-linux/amd64}"
+
+# ── Resolve the registry host ────────────────────────────────────────────────
+# The host is PER-ORG and differs by environment:
+#   stage      → org-<id>.registry-stage.airelabs.studio
+#   production → org-<id>.registry.airelabs.run
+# Supply your org id via REGISTRY_ORG_ID (nothing org-specific is committed), or
+# set REGISTRY_HOST directly to bypass derivation. The org id is only needed
+# when actually pushing — a build-only run (RELEASE_PUSH=false) skips it.
+if [[ -n "${REGISTRY_HOST:-}" ]]; then
+  : # caller supplied the full host
+elif [[ -n "${REGISTRY_ORG_ID:-}" ]]; then
+  case "$RELEASE_ENV" in
+    stage)      REGISTRY_HOST="org-${REGISTRY_ORG_ID}.registry-stage.airelabs.studio" ;;
+    production) REGISTRY_HOST="org-${REGISTRY_ORG_ID}.registry.airelabs.run" ;;
+  esac
+elif [[ "$RELEASE_PUSH" == "true" ]]; then
+  echo "release.sh: set REGISTRY_ORG_ID (your Aire Labs org id) or REGISTRY_HOST to push." >&2
+  echo "  e.g. REGISTRY_ORG_ID=01k... RELEASE_ENV=$RELEASE_ENV moon run lcoe:release" >&2
+  exit 2
+else
+  # Build-only: no real host needed, but the image must still be tagged.
+  REGISTRY_HOST="org-UNSET.registry-${RELEASE_ENV}.local"
+fi
 
 # ── Resolve the docker tag ───────────────────────────────────────────────────
 # Precedence, identical locally and in CI:
@@ -110,14 +135,15 @@ if [[ "$RELEASE_PUSH" == "true" ]]; then
     cat >&2 <<EOF
 release.sh: no credentials for $REGISTRY_HOST, and RELEASE_PUSH=true.
 
-Authenticate in one of these ways (neither puts secrets in this repo):
+Authenticate in one of these ways (neither puts secrets in this repo).
+The password is your Aire Labs registry API key; the username is '$REGISTRY_USERNAME'.
 
   1. Log in once (credential lives in your Docker keychain):
-       docker login $REGISTRY_HOST -u $REGISTRY_USERNAME
+       docker login $REGISTRY_HOST --username $REGISTRY_USERNAME --password <YOUR_API_KEY>
 
-  2. Or supply the password inline from your own secrets manager, e.g.:
-       REGISTRY_PASSWORD="\$(op read 'op://Shared/NonProduction/SIRO_REGISTRY_STAGE_PASSWORD')" \\
-         moon run lcoe:release
+  2. Or supply the API key inline from your own secrets manager, e.g.:
+       REGISTRY_PASSWORD="\$(op read 'op://<vault>/<item>/<field>')" \\
+         REGISTRY_ORG_ID=${REGISTRY_ORG_ID:-<your-org-id>} moon run lcoe:release
 
 Then re-run. (The image build is cached, so the retry is fast.)
 EOF
