@@ -95,17 +95,18 @@ REGISTRY_PASSWORD="$(op read 'op://<vault>/<item>/<field>')" \
 
 If you run `lcoe:release` without an org id or credential, the script fails fast **before** building and prints these instructions.
 
-CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)):
+CI does this automatically ([`.github/workflows/release.yaml`](.github/workflows/release.yaml)) — **stage only for now**:
 
 | Trigger | Environment | Docker tag |
 |---|---|---|
 | Push to `main` | stage | `branch-main-<shortsha>` |
-| Push of a `v*` tag (e.g. `v2026-06-10-001`) | production | `<the git tag>` |
-| Manual dispatch | your choice | `branch-<branch>-<shortsha>` |
+| Manual dispatch | stage | `branch-<branch>-<shortsha>` |
 
 The workflow needs, under **Settings → Secrets and variables → Actions**:
 - a repo **variable** `REGISTRY_ORG_ID` (your org id — not sensitive), and
-- two repo **secrets** — `REGISTRY_API_KEY_STAGE` and `REGISTRY_API_KEY_PROD` (the registry API keys).
+- a repo **secret** `REGISTRY_API_KEY_STAGE` (the stage registry API key).
+
+> Production isn't wired up yet. To add it later: a `v*` tag trigger resolving `env=production` plus a `REGISTRY_API_KEY_PROD` secret (and the prod org id if it differs).
 
 ## Layout
 

@@ -6,30 +6,21 @@ name: Release
 # `moon run lcoe:release` — the SAME entry point you run locally, so CI and a
 # developer machine do identical work.
 #
+# STAGE ONLY for now. Every release goes to the stage registry
+# (org-<id>.registry-stage.airelabs.studio). Production is intentionally not
+# wired up yet — when it is, add a `v*` tag trigger that resolves env=production
+# and a REGISTRY_API_KEY_PROD secret.
+#
 # Triggers & docker tags (the registry enforces IMMUTABLE tags, so every tag is
 # unique and pushed exactly once — there is no `:latest`):
-#   - push to main          → tag "branch-main-<shortsha>" (e.g.
-#                              branch-main-1234567), env=stage
-#   - push of a tag `v*`     → tag "<git tag>" (e.g. v2026-06-10-001),
-#                              env=production  (the preferred, blessed release)
-#   - manual dispatch        → choose the environment; tag derived by release.sh
-#                              ("branch-<branch>-<shortsha>")
+#   - push to main     → tag "branch-main-<shortsha>" (e.g. branch-main-1234567)
+#   - manual dispatch  → tag "branch-<branch>-<shortsha>" (derived by release.sh)
 
 on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target registry environment'
-        type: choice
-        options:
-          - stage
-          - production
-        default: stage
 
 permissions:
   contents: read
@@ -49,7 +40,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          # Full history + tags so scripts/release.sh can resolve the tag /
+          # Full history + tags so scripts/release.sh can resolve the
           # branch + sha for the docker tag.
           fetch-depth: 0
 
@@ -66,44 +57,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Resolve, in one place, the two things release.sh keys off:
-      #   release_env     stage | production
-      #   release_version the docker tag (empty → release.sh derives branch-…)
-      - name: Resolve release parameters
-        id: params
-        run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            # Blessed release: env=production, tag=<git tag> (preferred).
-            echo "release_env=production"                  >> "$GITHUB_OUTPUT"
-            echo "release_version=${{ github.ref_name }}"  >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual run: chosen env; let release.sh derive the branch-… tag.
-            echo "release_env=${{ github.event.inputs.environment }}" >> "$GITHUB_OUTPUT"
-            echo "release_version="                                   >> "$GITHUB_OUTPUT"
-          else
-            # Push to main: env=stage, tag=branch-main-<shortsha>.
-            echo "release_env=stage"                                          >> "$GITHUB_OUTPUT"
-            echo "release_version=branch-main-$(git rev-parse --short HEAD)"  >> "$GITHUB_OUTPUT"
-          fi
-
       # Build + test + lint + push, all via the one moon task. release.sh derives
-      # the per-org registry host from REGISTRY_ORG_ID + RELEASE_ENV; the only
-      # secret it needs is the API key (REGISTRY_PASSWORD).
+      # the per-org registry host from REGISTRY_ORG_ID + RELEASE_ENV (stage); the
+      # only secret it needs is the stage API key.
+      #
+      # Set under Settings → Secrets and variables → Actions:
+      #   Variables: REGISTRY_ORG_ID   (your org id — not sensitive)
+      #   Secrets:   REGISTRY_API_KEY_STAGE   (the stage registry API key)
       - name: Build and push image
         env:
-          RELEASE_ENV: ${{ steps.params.outputs.release_env }}
-          RELEASE_VERSION: ${{ steps.params.outputs.release_version }}
+          RELEASE_ENV: stage
+          # Let release.sh derive the tag (branch-<branch>-<shortsha>).
+          RELEASE_VERSION: ''
           # The Aire Labs registry login username (not a secret; the API key is).
           REGISTRY_USERNAME: api-key
-          # Non-sensitive org id → repo VARIABLE (Settings → Secrets and
-          # variables → Actions → Variables): REGISTRY_ORG_ID. The host is
-          # org-<id>.registry-stage.airelabs.studio (stage) /
-          # org-<id>.registry.airelabs.run (production).
           REGISTRY_ORG_ID: ${{ vars.REGISTRY_ORG_ID }}
-          # The API key → repo SECRET, one per environment (Settings → Secrets):
-          #   REGISTRY_API_KEY_STAGE, REGISTRY_API_KEY_PROD
-          REGISTRY_PASSWORD: >-
-            ${{ steps.params.outputs.release_env == 'production'
-                && secrets.REGISTRY_API_KEY_PROD
-                || secrets.REGISTRY_API_KEY_STAGE }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_API_KEY_STAGE }}
         run: moon run lcoe:release
