@@ -19,6 +19,7 @@ from lcoe.airelabs import (
     write_hook_output,
 )
 from lcoe.data_lookup import load_cost_assumptions
+from lcoe.hook_schema import input_unit, output_unit
 from lcoe.model import compute_lcoe
 
 
@@ -29,7 +30,9 @@ def main() -> None:
     target_year = int(require_number(params, "target_year"))
     discount_rate = require_number(params, "discount_rate")
     lifetime_years = int(
-        require_number(params, "lifetime_years", expected_unit="years")
+        require_number(
+            params, "lifetime_years", expected_unit=input_unit("lifetime_years")
+        )
     )
 
     # Load cost assumptions from the bundled CSV.
@@ -42,8 +45,8 @@ def main() -> None:
         write_hook_output(
             [
                 string_result("dataset", dataset),
-                number_result("capex", costs.capex, "USD/kW"),
-                number_result("opex", costs.opex, "USD/kW/yr"),
+                number_result("capex", costs.capex, output_unit("capex")),
+                number_result("opex", costs.opex, output_unit("opex")),
                 number_result("capacity_factor", costs.capacity_factor),
                 error_result("lcoe", "INVALID_DISCOUNT_RATE"),
             ]
@@ -65,10 +68,10 @@ def main() -> None:
     write_hook_output(
         [
             string_result("dataset", dataset),
-            number_result("capex", costs.capex, "USD/kW"),
-            number_result("opex", costs.opex, "USD/kW/yr"),
+            number_result("capex", costs.capex, output_unit("capex")),
+            number_result("opex", costs.opex, output_unit("opex")),
             number_result("capacity_factor", costs.capacity_factor),
-            number_result("lcoe", lcoe, "USD/MWh"),
+            number_result("lcoe", lcoe, output_unit("lcoe")),
         ]
     )
 

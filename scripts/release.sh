@@ -151,6 +151,21 @@ EOF
   fi
 fi
 
+# ── Hook schema label ────────────────────────────────────────────────────────
+# hook-schema.json declares this container's inputs and outputs. It goes into
+# the image label `com.airelabs.schema.v1.hook`, which the Aire registry reads
+# on push so the Configure Code Block dialog can pre-fill and check the inputs.
+# The registry rejects a label over 32 KB or one that fails validation without
+# failing the push (the reason shows on the Container Registry page and in
+# Configure Code Block), so check
+# the size here; `moon run lcoe:schema-check` validates the rest.
+HOOK_SCHEMA="$(python3 -c 'import json; print(json.dumps(json.load(open("hook-schema.json")), separators=(",", ":")))')"
+HOOK_SCHEMA_BYTES="$(printf '%s' "$HOOK_SCHEMA" | wc -c | tr -d ' ')"
+if (( HOOK_SCHEMA_BYTES > 32768 )); then
+  echo "release.sh: hook-schema.json is ${HOOK_SCHEMA_BYTES} bytes minified; the registry rejects labels over 32768." >&2
+  exit 1
+fi
+
 # ── Build ────────────────────────────────────────────────────────────────────
 # Use buildx so the same command can build multi-arch and push in one shot when
 # requested. `--load` (single-arch, into the local daemon) when not pushing so
@@ -158,7 +173,8 @@ fi
 #
 # Exactly ONE tag: the Aire Labs registry enforces immutable tags, so there is
 # no `:latest`. The tag is the git tag or branch-shortsha (unique per commit).
-BUILD_ARGS=(buildx build --platform "$PLATFORMS" -t "$TAGGED")
+BUILD_ARGS=(buildx build --platform "$PLATFORMS" -t "$TAGGED"
+  --label "com.airelabs.schema.v1.hook=$HOOK_SCHEMA")
 if [[ "$RELEASE_PUSH" == "true" ]]; then
   BUILD_ARGS+=(--push)
 else
