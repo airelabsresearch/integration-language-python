@@ -20,6 +20,7 @@ tasks:
       - 'tests/**/*'
       - 'data/**/*'
       - 'fixtures/**/*'
+      - 'hook-schema.json'
       - 'main.py'
       - 'pyproject.toml'
       - 'uv.lock'
@@ -27,6 +28,15 @@ tasks:
     # a re-run when none of the inputs changed — so `moon run lcoe:build` (which
     # depends on this) is a no-op on an unchanged tree instead of re-running the
     # suite every time.
+
+  # Validate hook-schema.json against the published JSON Schema for the
+  # `com.airelabs.schema.v1.hook` label; release.sh checks the 32 KB size cap.
+  # The registry does not fail a push with a bad label. It shows the reason on
+  # the Container Registry page and in Configure Code Block.
+  schema-check:
+    command: 'uvx check-jsonschema@0.38.2 --schemafile https://app.airelabs.com/schemas/v1/siro.v1alpha2.HookSchema.jsonschema.strict.bundle.json hook-schema.json'
+    inputs:
+      - 'hook-schema.json'
 
   lint:
     command: 'uv run ruff check .'
@@ -66,6 +76,7 @@ tasks:
       - 'lcoe/**/*'
       - 'data/**/*'
       - 'fixtures/**/*'
+      - 'hook-schema.json'
       - 'main.py'
       - 'pyproject.toml'
       - 'uv.lock'
@@ -79,6 +90,7 @@ tasks:
     deps:
       - 'test'
       - 'lint'
+      - 'schema-check'
 
   # Build AND push the image to the Aire Labs registry. This is what the GitHub
   # release workflow invokes (`moon run lcoe:release`), and what you run locally
@@ -99,3 +111,4 @@ tasks:
     deps:
       - 'test'
       - 'lint'
+      - 'schema-check'

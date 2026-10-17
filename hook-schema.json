@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "inputs": [
+    {
+      "name": "dataset",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_STRING",
+      "required": true,
+      "description": "Cost dataset to load: \"solar\" or \"wind\""
+    },
+    {
+      "name": "target_year",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "required": true,
+      "description": "Year to look up in the bundled cost data"
+    },
+    {
+      "name": "discount_rate",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "required": true,
+      "description": "Discount rate as a fraction, e.g. 0.08. Must be greater than 0"
+    },
+    {
+      "name": "lifetime_years",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "required": true,
+      "unit": "yr",
+      "description": "Project lifetime"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "dataset",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_STRING",
+      "description": "The dataset the costs came from"
+    },
+    {
+      "name": "capex",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "unit": "USD/kW",
+      "description": "Capital cost in the target year"
+    },
+    {
+      "name": "opex",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "unit": "USD/kWyr",
+      "description": "Fixed operating cost in the target year"
+    },
+    {
+      "name": "capacity_factor",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "description": "Capacity factor as a fraction"
+    },
+    {
+      "name": "lcoe",
+      "type": "CONTAINER_FUNCTION_VALUE_TYPE_QUANTITY",
+      "unit": "USD/MWh",
+      "label": "LCOE",
+      "description": "Levelized cost of energy"
+    }
+  ]
+}

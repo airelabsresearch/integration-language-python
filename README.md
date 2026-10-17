@@ -38,6 +38,24 @@ cp fixtures/hook-input-bad-rate.json /tmp/airelabs/hook-input.json        # inva
 cp fixtures/hook-input-unknown-dataset.json /tmp/airelabs/hook-input.json # unknown dataset (hard error)
 ```
 
+## Declared inputs and outputs
+
+[`hook-schema.json`](hook-schema.json) declares the inputs this container reads and the outputs it writes. The release build puts it in the image label `com.airelabs.schema.v1.hook`. When someone picks this image under **Registry image** in Aire's **Configure Code Block** dialog, the dialog reads the declaration. It lists each input with its description, blocks **Save** until every required input is mapped, and sets **Send as** to the declared unit. It also pre-fills the outputs.
+
+The file is the only copy of the declaration. `main.py` reads its expected units from it through `lcoe/hook_schema.py`, and `tests/test_hook_schema.py` checks that the fixtures and the results match it.
+
+Unit names are the ones Aire sends: `yr`, not `years`; `USD/kWyr`, not `USD/kW/yr`. A declared unit Aire cannot produce makes every run fail its unit check.
+
+Validate the file before you push:
+
+```bash
+moon run lcoe:schema-check
+```
+
+This checks it against the published [JSON Schema](https://app.airelabs.com/schemas/v1/siro.v1alpha2.HookSchema.jsonschema.strict.bundle.json). The registry does not fail a push with a bad label. It ignores the label and shows the reason on the **Container Registry** page, next to the tag, and in the **Configure Code Block** dialog. The file cannot carry a `$schema` key, because the registry rejects any key it does not know.
+
+To check a built image: `docker inspect <image> --format '{{ index .Config.Labels "com.airelabs.schema.v1.hook" }}'`.
+
 ## Local development
 
 The toolchain is managed by [proto](https://moonrepo.dev/proto) + [moon](https://moonrepo.dev/moon), with [uv](https://docs.astral.sh/uv/) as the Python package manager. **This repo is a self-contained moon workspace** — clone it on its own and everything works; it is only vendored into the siro monorepo as a git submodule for visibility. The runtime has **no third-party dependencies** (the Hook I/O helpers use only the Python standard library); `pytest` and `ruff` are dev-only tools.
@@ -46,6 +64,7 @@ The toolchain is managed by [proto](https://moonrepo.dev/proto) + [moon](https:/
 proto install            # installs moon + python + uv pinned in .prototools
 moon run lcoe:test       # moon runs `uv sync` for you (cached), then pytest
 moon run lcoe:lint       # ruff check
+moon run lcoe:schema-check # validate hook-schema.json
 moon run lcoe:format     # ruff format --check (CI gate)
 moon run lcoe:format-fix # apply formatting + lint autofixes in place
 moon run lcoe:build      # build the Docker image locally (test + lint first)
@@ -93,6 +112,8 @@ It needs, under **Settings → Secrets and variables → Actions**:
 | Path | Purpose |
 |---|---|
 | `main.py` | Entry point — reads HookInput, computes LCOE, writes HookOutput. |
+| `hook-schema.json` | Declared inputs and outputs; becomes the `com.airelabs.schema.v1.hook` image label. |
+| `lcoe/hook_schema.py` | Reads `hook-schema.json` so `main.py` takes its units from it. |
 | `lcoe/airelabs.py` | Aire Labs Hook I/O helpers (stdlib-only — copy this into your own project). |
 | `lcoe/model.py` | Pure LCOE business logic (CRF + LCOE formula), no I/O. |
 | `lcoe/data_lookup.py` | Loads cost assumptions from the bundled `data/*.csv`. |
@@ -103,6 +124,6 @@ It needs, under **Settings → Secrets and variables → Actions**:
 | `scripts/release.sh` | Build + (optionally) push the image — one entry point for local and CI. |
 | `moon.yml`, `.moon/` | moon project + toolchain (python/uv) config; the `lcoe:*` tasks. |
 | `.prototools` | Pinned moon / python / uv versions (`proto install`). |
-| `.github/workflows/` | `ci` (lint + test) and `release` (build + push the image). |
+| `.github/workflows/` | `ci` (lint + test + schema check) and `release` (build + push the image). |
 
 Start from `lcoe/airelabs.py` (the stdlib-only Hook I/O helpers) when writing your own function.

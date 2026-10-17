@@ -14,7 +14,7 @@
     },
     {
       "name": "lifetime_years",
-      "number": { "value": "25", "unit": "years" }
+      "number": { "value": "25", "unit": "yr" }
     }
   ]
 }

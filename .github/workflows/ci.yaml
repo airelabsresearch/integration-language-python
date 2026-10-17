@@ -1,6 +1,7 @@
 name: CI
 
-# Lint + test on every push and PR. Mirrors `moon run lcoe:test lcoe:lint` —
+# Lint, test and validate hook-schema.json on every push and PR. Mirrors
+# `moon run lcoe:lint lcoe:test lcoe:schema-check` —
 # the same tasks you run locally — so green here means green on your machine.
 
 on:
@@ -33,5 +34,5 @@ jobs:
         with:
           auto-install: true
 
-      - name: Lint and test
-        run: moon run lcoe:lint lcoe:test
+      - name: Lint, test and check the hook schema
+        run: moon run lcoe:lint lcoe:test lcoe:schema-check
